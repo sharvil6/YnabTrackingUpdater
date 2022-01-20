@@ -1,5 +1,5 @@
 use std::{collections::HashMap, fs, io};
-use reqwest::blocking::{Client};
+use reqwest::blocking::{Client, self};
 use serde_json::json;
 
 use crate::ynab_json_structures::YnabMoney;
@@ -13,7 +13,8 @@ struct ModifiedAccounts {
     adjustment: ynab_json_structures::YnabMoney
 }
 
-const LAST_USED_BUDGET_BASE_URL: &str = "https://api.youneedabudget.com/v1/budgets/last-used/accounts?access_token=";
+const LAST_USED_BUDGET_GET_ACCOUNTS_BASE_URL: &str = "https://api.youneedabudget.com/v1/budgets/last-used/accounts?access_token=";
+const LAST_USED_BUDGET_POST_TRANSACTION_BASE_URL: &str = "https://api.youneedabudget.com/v1/budgets/last-used/transactions?access_token=";
 
 fn parse_api_token_file(filepath: &str, token_dict: &mut HashMap<String, String>)
 {
@@ -33,6 +34,12 @@ fn parse_api_token_file(filepath: &str, token_dict: &mut HashMap<String, String>
 
 }
 
+// take input month, return string of date
+fn get_adjustment_date() -> String {
+
+    String::new()
+}
+
 fn main() {
     let mut api_token_dictionary:HashMap<String, String> = HashMap::new();
     parse_api_token_file("src/api_tokens.env", &mut api_token_dictionary);
@@ -48,10 +55,10 @@ fn main() {
         access_token = api_token_dictionary.get(&user_input.trim().to_uppercase());
     }
 
-    let url = format!("{}{}", LAST_USED_BUDGET_BASE_URL, access_token.unwrap());
+    let url = format!("{}{}", LAST_USED_BUDGET_GET_ACCOUNTS_BASE_URL, access_token.unwrap());
     let blocking_client = Client::new();
     let accounts_resp = blocking_client.get(url.as_str()).send();
-    
+
     if accounts_resp.is_ok() {
         let accounts_text = accounts_resp.unwrap().text().unwrap();
         let accounts: Result< ynab_json_structures::AccountsData, _> = serde_json::from_str(accounts_text.as_str());
@@ -71,11 +78,9 @@ fn main() {
             }
             
             let mut user_input:String = String::new();
-            
+            io::stdin().read_line(&mut user_input).expect("Failed to read user input");
 
             while user_input.trim().to_uppercase() != "Q" {
-
-                io::stdin().read_line(&mut user_input).expect("Failed to read user input");
 
                 let account_index: usize = user_input.trim().parse().expect("Please type a number");
                 let account_info = accounts.as_ref().unwrap().get_account_vec().get(account_index);
@@ -89,7 +94,7 @@ fn main() {
                         io::stdin().read_line(&mut new_balance).expect("Failed to read user input");
                         
                         let new_balance = ynab_json_structures::YnabMoney::new_from_string(new_balance);
-                        let adjustment_amt = ynab_json_structures::YnabMoney::new_from_milliunits((new_balance.milliunits - current_balance.milliunits) as i64);
+                        let adjustment_amt = ynab_json_structures::YnabMoney::new_from_milliunits( ( (new_balance.milliunits as i64) - (current_balance.milliunits as i64)) as i64);
                         println!("Balance Adjustment: ${}", adjustment_amt.money_string);
                         
                         modified_accounts.get_mut(account_index).unwrap().adjustment = adjustment_amt;
@@ -108,8 +113,14 @@ fn main() {
                         continue;
                     }
                 }
+
+                user_input.clear();
+                io::stdin().read_line(&mut user_input).expect("Failed to read user input");
                 
             }
+
+            
+            // println!("\n\nEnter month of adjustment: {}", month_guess);
 
             for modification in modified_accounts.iter() {
                 if modification.adjustment.milliunits != 0 {
@@ -117,8 +128,8 @@ fn main() {
                         "transactions":[
                             {
                                 "account_id": modification.account_id,
-                                "date": "2021-08-31",
-                                "amount": modification.adjustment.milliunits,
+                                "date": "2021-12-31",
+                                "amount": (modification.adjustment.sign as i64) * (modification.adjustment.milliunits as i64),
                                 "memo": "Market Change & Dividends",
                                 "cleared": "cleared",
                                 "approved": true
@@ -127,10 +138,13 @@ fn main() {
                     });
 
                     println!("Submitting adjustment for {} ...", modification.name);
-
+                    println!("JSON  : {:?}", transaction_data);
+                    
+                    let url = format!("{}{}", LAST_USED_BUDGET_POST_TRANSACTION_BASE_URL, access_token.unwrap());
                     let result = blocking_client.post(url.as_str())
                                                 .json(&transaction_data)
                                                 .send();
+                    println!("{:?}", result);
                     match result {
                         Ok(response) => {
                             if response.status().as_u16() == 201 {

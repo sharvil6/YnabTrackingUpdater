@@ -27,15 +27,15 @@ impl YnabMoney {
 
         if milliunits < 0 {
             ynab_sign = -1;
-            ynab_milliunits = -milliunits as u64;
+            ynab_milliunits = milliunits.abs() as u64;
         }
         else {
             ynab_sign = 1;
-            ynab_milliunits = milliunits as u64;
+            ynab_milliunits = milliunits.abs() as u64;
         }
         
-        ynab_dollars = (milliunits / 1000) as u64;
-        ynab_cents = ((milliunits % 1000) / 100) as u64;
+        ynab_dollars = (ynab_milliunits / 1000) as u64;
+        ynab_cents = ((ynab_milliunits % 1000) / 10) as u64;
 
         YnabMoney {
             milliunits: ynab_milliunits,
