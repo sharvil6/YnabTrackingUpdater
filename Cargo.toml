@@ -9,3 +9,5 @@ edition = "2021"
 serde = { version = "*", features = ["derive"]}
 reqwest = {version = "*", features = ["blocking", "json"]}
 serde_json = "*"
+chrono = "*"
+num-traits = "*"

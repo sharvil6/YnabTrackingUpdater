@@ -1,6 +1,8 @@
 use std::{collections::HashMap, fs, io};
-use reqwest::blocking::{Client, self};
+use reqwest::blocking::Client;
 use serde_json::json;
+use chrono::{Month, Datelike, TimeZone, Utc};
+use num_traits::cast::FromPrimitive;
 
 use crate::ynab_json_structures::YnabMoney;
 
@@ -119,8 +121,16 @@ fn main() {
                 
             }
 
+            println!("\n\nEnter month of adjustment: ");
+            user_input.clear();
+            io::stdin().read_line(&mut user_input).expect("Failed to read user input");
             
-            // println!("\n\nEnter month of adjustment: {}", month_guess);
+            let month_number: Month = Month::from_u32(user_input.trim().parse().unwrap()).unwrap();
+            let mut next_month = Utc.ymd(Utc::now().date().year(), month_number.succ().number_from_month(), 1);
+            if month_number == Month::December {
+                next_month = next_month.with_year(next_month.year() + 1).unwrap();
+            }
+            let transaction_date = next_month.pred();
 
             for modification in modified_accounts.iter() {
                 if modification.adjustment.milliunits != 0 {
@@ -128,7 +138,7 @@ fn main() {
                         "transactions":[
                             {
                                 "account_id": modification.account_id,
-                                "date": "2021-12-31",
+                                "date": transaction_date.format("%Y-%m-%d").to_string(),
                                 "amount": (modification.adjustment.sign as i64) * (modification.adjustment.milliunits as i64),
                                 "memo": "Market Change & Dividends",
                                 "cleared": "cleared",
