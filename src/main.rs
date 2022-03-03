@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs, io};
 use reqwest::blocking::Client;
 use serde_json::json;
-use chrono::{Month, Datelike, TimeZone, Utc};
+use chrono::{Month, Datelike, TimeZone, Utc, Date};
 use num_traits::cast::FromPrimitive;
 
 use crate::ynab_json_structures::YnabMoney;
@@ -36,10 +36,27 @@ fn parse_api_token_file(filepath: &str, token_dict: &mut HashMap<String, String>
 
 }
 
-// take input month, return string of date
-fn get_adjustment_date() -> String {
 
-    String::new()
+fn get_last_day_of_month(input_month: Month) -> Date<Utc>{
+    // create successive month with date as 1
+    let mut successive_month = Utc.ymd(
+                                    Utc::now().date().year(),
+                                    input_month.succ().number_from_month(),
+                                    1
+                                );
+
+    // if current month is December, then increment year (this probably isn't neccessary)
+    if input_month == Month::December {
+        successive_month = Utc.ymd(
+            Utc::now().date().year() + 1,
+            input_month.succ().number_from_month(),
+            1
+        );
+
+    }
+
+    let output_date = successive_month.pred();
+    return output_date;
 }
 
 fn main() {
@@ -92,12 +109,13 @@ fn main() {
                         println!("You selected: {}", account.name);
                         let current_balance = ynab_json_structures::YnabMoney::new_from_milliunits(account.balance);
                         let mut new_balance = String::new();
+                        println!("Current Balance: ${}", current_balance.money_string);
                         println!("New Balance: $");
                         io::stdin().read_line(&mut new_balance).expect("Failed to read user input");
                         
                         let new_balance = ynab_json_structures::YnabMoney::new_from_string(new_balance);
                         let adjustment_amt = ynab_json_structures::YnabMoney::new_from_milliunits( ( (new_balance.milliunits as i64) - (current_balance.milliunits as i64)) as i64);
-                        println!("Balance Adjustment: ${}", adjustment_amt.money_string);
+                        println!("Balance Adjustment: ${}\n\n", adjustment_amt.money_string);
                         
                         modified_accounts.get_mut(account_index).unwrap().adjustment = adjustment_amt;
 
@@ -125,12 +143,8 @@ fn main() {
             user_input.clear();
             io::stdin().read_line(&mut user_input).expect("Failed to read user input");
             
-            let month_number: Month = Month::from_u32(user_input.trim().parse().unwrap()).unwrap();
-            let mut next_month = Utc.ymd(Utc::now().date().year(), month_number.succ().number_from_month(), 1);
-            if month_number == Month::December {
-                next_month = next_month.with_year(next_month.year() + 1).unwrap();
-            }
-            let transaction_date = next_month.pred();
+            let input_month: Month = Month::from_u32(user_input.trim().parse().unwrap()).unwrap();
+            let transaction_date = get_last_day_of_month(input_month);
 
             for modification in modified_accounts.iter() {
                 if modification.adjustment.milliunits != 0 {
@@ -148,13 +162,11 @@ fn main() {
                     });
 
                     println!("Submitting adjustment for {} ...", modification.name);
-                    println!("JSON  : {:?}", transaction_data);
                     
                     let url = format!("{}{}", LAST_USED_BUDGET_POST_TRANSACTION_BASE_URL, access_token.unwrap());
                     let result = blocking_client.post(url.as_str())
                                                 .json(&transaction_data)
                                                 .send();
-                    println!("{:?}", result);
                     match result {
                         Ok(response) => {
                             if response.status().as_u16() == 201 {
