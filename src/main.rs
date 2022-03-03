@@ -8,6 +8,16 @@ use crate::ynab_json_structures::YnabMoney;
 
 mod ynab_json_structures;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_get_last_day_of_month() {
+        assert_eq!(get_last_day_of_month(Month::April), Utc.ymd(Utc::now().year(), Month::April.number_from_month(), 30));
+        assert_eq!(get_last_day_of_month(Month::July), Utc.ymd(Utc::now().year(), Month::July.number_from_month(), 31));
+    }
+}
+
 struct ModifiedAccounts {
     account_id: String,
     name: String,
